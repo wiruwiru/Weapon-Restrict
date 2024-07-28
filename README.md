@@ -1,12 +1,14 @@
 # Weapon Restrict
 The plugin allows you to restrict the use of certain weapons depending on the players in the teams or the total number of players, as well as the number of specified weapons. You can also set administrators' immunity to restrictions
 
-## Requirements
-- [Metamod](https://www.sourcemm.net/downloads.php/?branch=master)
-- [CounterStrikeSharp](https://github.com/roflmuffin/CounterStrikeSharp/releases/tag/v110) >= v110
+## Installation
+1. Install [CounterStrike Sharp](https://github.com/roflmuffin/CounterStrikeSharp) and [Metamod:Source](https://www.sourcemm.net/downloads.php/?branch=master)
 
-## Install
-- Drop folder `build/Weapon_Restrict` to `addons/counterstrikesharp/plugins/`
+2. Download [Weapon_Restrict.zip](https://github.com/wiruwiru/Weapon-Restrict/releases) from the releases section.
+
+3. Unzip the archive and upload it to the game server
+
+4. Start the server and wait for the Config.json and RestrictConfig.json files to be generated.
 
 - Configuration files will be generated after the plugin is launched in the folder `addons/counterstrikesharp/plugins/Weapon_Restrict`:
 	- `Config.json`				- Common settings
@@ -65,11 +67,3 @@ The plugin allows you to restrict the use of certain weapons depending on the pl
 ```diff
 - Do not try to copy this jsons into your config. Json does not support commenting! Comments have been added here for your convenience.
 ```
-
-## About possible problems, please let me know: 
-[<img src="https://i.ibb.co/LJz83MH/a681b18dd681f38e599286a07a92225d.png" width="15.3%"/>](https://discordapp.com/users/858709381088935976/)
-[<img src="https://i.ibb.co/tJTTmxP/vk-process-mining.png" width="15.3%"/>](https://vk.com/bgtroll)
-[<img src="https://i.ibb.co/VjhryGb/png-transparent-brand-logo-steam-gump-s.png" width="15.3%"/>](https://hlmod.ru/members/palonez.92448/)
-[<img src="https://i.ibb.co/xHZPN0g/s-l500.png" width="15.3%"/>](https://steamcommunity.com/id/comecamecame)
-[<img src="https://i.ibb.co/S0LyzmX/tg-process-mining.png" width="16.3%"/>](https://t.me/ArrayListX)
-[<img src="https://i.ibb.co/Tb2gprD/2056021.png" width="15.3%"/>](https://github.com/Quake1011)

@@ -8,29 +8,28 @@ using CounterStrikeSharp.API.Modules.Admin;
 using CounterStrikeSharp.API.Modules.Cvars;
 using CounterStrikeSharp.API.Modules.Entities;
 using CounterStrikeSharp.API.Modules.Entities.Constants;
+using System.Numerics;
 
 namespace Weapon_Restrict;
 
-[MinimumApiVersion(110)]
+[MinimumApiVersion(228)]
 public class WeaponRestrict : BasePlugin
 {
 	public override string ModuleName => "Weapon Restrict";
-    public override string ModuleVersion => "1.2.1";
-    public override string ModuleAuthor => "Quake1011";
+    public override string ModuleVersion => "1.2.2";
+    public override string ModuleAuthor => "Quake1011 and luca.uy";
     public override string ModuleDescription => "Prohibits purchase or picking up restricted weapons";
-    private const string MyLink = "https://github.com/Quake1011";
     
     private List<WeaponMeta> _weaponList = new();
     private List<RestrictConfig>? _restrictions = new();
     private static Config? _config = new();
+    private CCSGameRules? _gameRules;
 
     public override void Load(bool hotReload)
     {
 	    RegisterEventHandler<EventItemPurchase>(OnEventItemPurchasePost);
 	    RegisterEventHandler<EventItemPickup>(OnEventItemPickupPost);
 	    RegisterEventHandler<EventGameStart>(OnEventGameStart);
-	    
-	    PrintInfo();
 	    
 	    _weaponList = MetaData.Load();
 	    LoadConfigs();
@@ -46,7 +45,12 @@ public class WeaponRestrict : BasePlugin
     [GameEventHandler(mode: HookMode.Post)]
     private HookResult OnEventItemPurchasePost(EventItemPurchase @event, GameEventInfo info)
     {
-	    if (IsAdmin(@event.Userid)) 
+        if (_gameRules?.WarmupPeriod == true)
+        {
+            return HookResult.Continue;
+        }
+        
+		if (IsAdmin(@event.Userid)) 
 		    return HookResult.Continue;
 	    
 	    var restrictedWeapon = _weaponList.FirstOrDefault(w => w.WeaponName == @event.Weapon);
@@ -87,93 +91,88 @@ public class WeaponRestrict : BasePlugin
     [GameEventHandler(mode: HookMode.Pre)]
     private HookResult OnEventItemPickupPost(EventItemPickup @event, GameEventInfo info)
     {
-	    if (IsAdmin(@event.Userid)) 
-		    return HookResult.Continue;
-	    
-	    var checking = RestrictedWeaponCheck(@event.Defindex, @event.Userid.TeamNum);
-	    
-	    if (checking.ReturnedResult == false)
-		    return HookResult.Continue;
-	    
-		var restrictedWeapon = _weaponList.FirstOrDefault(w => w.DefIndex == @event.Defindex);
-		
-		if (restrictedWeapon == null) 
-			return HookResult.Continue;
+        if (_gameRules?.WarmupPeriod == true)
+        {
+            return HookResult.Continue;
+        }
 
-		foreach (var ownerWeapon in @event.Userid.PlayerPawn.Value!.WeaponServices!.MyWeapons)
-		{
-			if (ownerWeapon is not { IsValid: true, Value.IsValid: true }) 
-				continue;
-			if (ownerWeapon.Value.AttributeManager.Item.ItemDefinitionIndex != @event.Defindex) 
-				continue;
+        if (IsAdmin(@event.Userid))
+            return HookResult.Continue;
 
-			var tempNum = 0;
-			
-			switch (ownerWeapon.Value.AttributeManager.Item.ItemDefinitionIndex)
-			{
-				case (int)ItemDefinition.FLASHBANG:
-					tempNum += @event.Userid.PlayerPawn.Value.WeaponServices.Ammo[(int)GrenadesPos.FlashAmmo];
-					break;
-				case (ushort)ItemDefinition.HIGH_EXPLOSIVE_GRENADE:
-				case (ushort)ItemDefinition.FRAG_GRENADE:
-					tempNum += @event.Userid.PlayerPawn.Value.WeaponServices.Ammo[(int)GrenadesPos.HegrenadeAmmo];
-					break;
-				case (ushort)ItemDefinition.DECOY_GRENADE:
-					tempNum += @event.Userid.PlayerPawn.Value.WeaponServices.Ammo[(int)GrenadesPos.DecoyAmmo];
-					break;
-				case (ushort)ItemDefinition.SMOKE_GRENADE:
-					tempNum += @event.Userid.PlayerPawn.Value.WeaponServices.Ammo[(int)GrenadesPos.SmokeAmmo];
-					break;
-				case (ushort)ItemDefinition.MOLOTOV:
-				case (ushort)ItemDefinition.INCENDIARY_GRENADE:
-					tempNum += @event.Userid.PlayerPawn.Value.WeaponServices.Ammo[(int)GrenadesPos.IncAmmo];
-					break;
-			}
-			
-			ownerWeapon.Value.Remove();
-			
-			tempNum--;
-			for (var i = tempNum; i > 0; i--)
-				@event.Userid.GiveNamedItem(restrictedWeapon.WeaponName!);
+        var checking = RestrictedWeaponCheck(@event.Defindex, @event.Userid.TeamNum);
 
-			if (_config!.RestrictMessageStatus)
-			{
-				var message = _config.RestrictMessageText;
-				message = message?.Replace("{TAG}", _config.Tag);
-				message = message?.Replace("{WEAPON}", restrictedWeapon.Name);
-				message = message?.Replace("{COUNT}", $"{checking.ReturnedCount}");
-				message = ReplaceTags(message!);
+        if (checking.ReturnedResult == false)
+            return HookResult.Continue;
 
-				var printMethods = new Dictionary<int, Action<string, CCSPlayerController>> 
-				{
-					{(int)PrintType.Chat, (msg, user) => user.PrintToChat(" " + msg)},
-					{(int)PrintType.Html, (msg, user) => user.PrintToCenterHtml(msg)},
-					{(int)PrintType.Center, (msg, user) => user.PrintToCenter(msg)} 
-				};
+        var restrictedWeapon = _weaponList.FirstOrDefault(w => w.DefIndex == @event.Defindex);
 
-				printMethods[_config.DestinationTypeRestrictMessage](message, @event.Userid);
-			}
-		    
-			@event.Userid.ExecuteClientCommand("lastinv");
+        if (restrictedWeapon == null)
+            return HookResult.Continue;
 
-			return HookResult.Continue;
-		}
+        foreach (var ownerWeapon in @event.Userid.PlayerPawn.Value!.WeaponServices!.MyWeapons)
+        {
+            if (ownerWeapon is not { IsValid: true, Value.IsValid: true })
+                continue;
+            if (ownerWeapon.Value.AttributeManager.Item.ItemDefinitionIndex != @event.Defindex)
+                continue;
 
-		return HookResult.Continue;
+            var tempNum = 0;
+
+            switch (ownerWeapon.Value.AttributeManager.Item.ItemDefinitionIndex)
+            {
+                case (int)ItemDefinition.FLASHBANG:
+                    tempNum += @event.Userid.PlayerPawn.Value.WeaponServices.Ammo[(int)GrenadesPos.FlashAmmo];
+                    break;
+                case (ushort)ItemDefinition.HIGH_EXPLOSIVE_GRENADE:
+                case (ushort)ItemDefinition.FRAG_GRENADE:
+                    tempNum += @event.Userid.PlayerPawn.Value.WeaponServices.Ammo[(int)GrenadesPos.HegrenadeAmmo];
+                    break;
+                case (ushort)ItemDefinition.DECOY_GRENADE:
+                    tempNum += @event.Userid.PlayerPawn.Value.WeaponServices.Ammo[(int)GrenadesPos.DecoyAmmo];
+                    break;
+                case (ushort)ItemDefinition.SMOKE_GRENADE:
+                    tempNum += @event.Userid.PlayerPawn.Value.WeaponServices.Ammo[(int)GrenadesPos.SmokeAmmo];
+                    break;
+                case (ushort)ItemDefinition.MOLOTOV:
+                case (ushort)ItemDefinition.INCENDIARY_GRENADE:
+                    tempNum += @event.Userid.PlayerPawn.Value.WeaponServices.Ammo[(int)GrenadesPos.IncAmmo];
+                    break;
+                default:
+                    break;
+            }
+
+            @event.Userid.RemoveItemByDesignerName(ownerWeapon.Value.DesignerName, false);
+
+            tempNum--;
+            for (var i = tempNum; i > 0; i--)
+                @event.Userid.GiveNamedItem(restrictedWeapon.WeaponName!);
+
+            if (_config!.RestrictMessageStatus)
+            {
+                var message = _config.RestrictMessageText;
+                message = message?.Replace("{TAG}", _config.Tag);
+                message = message?.Replace("{WEAPON}", restrictedWeapon.Name);
+                message = message?.Replace("{COUNT}", $"{checking.ReturnedCount}");
+                message = ReplaceTags(message!);
+
+                var printMethods = new Dictionary<int, Action<string, CCSPlayerController>>
+            {
+                {(int)PrintType.Chat, (msg, user) => user.PrintToChat(" " + msg)},
+                {(int)PrintType.Html, (msg, user) => user.PrintToCenterHtml(msg)},
+                {(int)PrintType.Center, (msg, user) => user.PrintToCenter(msg)}
+            };
+
+                printMethods[_config.DestinationTypeRestrictMessage](message, @event.Userid);
+            }
+
+            @event.Userid.ExecuteClientCommand("lastinv");
+
+            return HookResult.Continue;
+        }
+
+        return HookResult.Continue;
     }
 
-    private void PrintInfo()
-    {
-        Server.PrintToConsole(" ");
-        Server.PrintToConsole("#####################################");
-        Server.PrintToConsole($"Plugin name - {ModuleName} [v{ModuleVersion}]");
-        Server.PrintToConsole($"Author - {ModuleAuthor}");
-        Server.PrintToConsole($"Description - {ModuleDescription}");
-        Server.PrintToConsole($"Github - {MyLink}");
-        Server.PrintToConsole("#####################################");
-        Server.PrintToConsole(" ");
-    }
-    
     private Result RestrictedWeaponCheck(long defIndex, int team)
     {
 	    var res = new Result { ReturnedCount = 0, ReturnedResult = true };
@@ -301,18 +300,6 @@ public class WeaponRestrict : BasePlugin
 
 	    return total;
     }
-    
-    // public static void DropPlayerWeapon(CCSPlayerController player, CBasePlayerWeapon weapon)
-    // {
-	   //  foreach (var wpn in player.PlayerPawn.Value.WeaponServices!.MyWeapons)
-	   //  {
-		  //   if (weapon.Handle != wpn.Handle) continue;
-		  //   var service = new CCSPlayer_ItemServices(player.PlayerPawn.Value.ItemServices!.Handle);
-		  //   var dropWeapon = VirtualFunction.CreateVoid<nint, nint>(service.Handle, 19);
-		  //   dropWeapon(service.Handle, weapon.Handle);
-	   //  }
-    // }
-    
     private void LoadConfigs()
     {
 	    var configPath = Path.Join(ModuleDirectory, "Config.json");
@@ -367,7 +354,7 @@ public class WeaponRestrict : BasePlugin
 		    case (byte)PrintType.Chat:
 			    text = text.Replace("{DEFAULT}", $"{ChatColors.Default}");
 			    text = text.Replace("{WHITE}", $"{ChatColors.White}");
-			    text = text.Replace("{DARKRED}", $"{ChatColors.Darkred}");
+			    text = text.Replace("{DARKRED}", $"{ChatColors.DarkRed}");
 			    text = text.Replace("{GREEN}", $"{ChatColors.Green}");
 			    text = text.Replace("{LIGHTYELLOW}", $"{ChatColors.LightYellow}");
 			    text = text.Replace("{LIGHTBLUE}", $"{ChatColors.LightBlue}");
