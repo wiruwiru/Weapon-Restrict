@@ -64,6 +64,4 @@ The plugin allows you to restrict the use of certain weapons depending on the pl
 }
 // here can add more weapons using ","
 ```
-```diff
 - Do not try to copy this jsons into your config. Json does not support commenting! Comments have been added here for your convenience.
-```
